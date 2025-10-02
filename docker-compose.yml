@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  db:
+    image: gvenzl/oracle-xe:21.3.0
+    container_name: oracle-db
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+    environment:
+      ORACLE_PASSWORD: oracle
+    volumes:
+      - ./backend-plsql:/docker-entrypoint-initdb.d
+
+  django:
+    build: ./backend-django
+    container_name: django-backend
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend-django:/app
+    depends_on:
+      - db
+
+  angular:
+    build: ./frontend-angular
+    container_name: angular-frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend-angular:/usr/src/app
+    command: npm start
+    depends_on:
+      - django
