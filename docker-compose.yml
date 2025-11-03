@@ -28,6 +28,7 @@ services:
       - "4200:4200"
     volumes:
       - ./frontend-angular:/usr/src/app
+      - /usr/src/app/node_modules
     command: npm start
     depends_on:
       - django
