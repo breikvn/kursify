@@ -21,6 +21,8 @@ DROP TABLE d_packages;
 DROP TABLE d_clients;
 DROP TABLE d_cds;
 ALTER TABLE DEPARTMENTS DROP CONSTRAINT "DEPT_MGR_FK";
+DROP TABLE course_enrollments;
+DROP TABLE courses;
 DROP TABLE job_grades;
 DROP TABLE job_history;
 DROP TABLE employees;
@@ -3658,6 +3660,8 @@ CREATE OR REPLACE FORCE VIEW  "EMP_DETAILS_VIEW" ("EMPLOYEE_ID", "JOB_ID", "MANA
 DROP SEQUENCE "DEPARTMENTS_SEQ";
 DROP SEQUENCE "EMPLOYEES_SEQ";
 DROP SEQUENCE "LOCATIONS_SEQ";
+DROP SEQUENCE "COURSE_ENROLLMENTS_SEQ";
+DROP SEQUENCE "COURSES_SEQ";
 
 --Create sequence for departments PK				
 CREATE SEQUENCE "DEPARTMENTS_SEQ"  
@@ -3682,3 +3686,64 @@ CREATE SEQUENCE "LOCATIONS_SEQ"
 	INCREMENT BY 100 
 	START WITH 3300 
 	NOCACHE  NOORDER  NOCYCLE;
+
+-- Create courses table
+CREATE TABLE "COURSES"
+   ("COURSE_ID" NUMBER(10,0),
+    "TITLE" VARCHAR2(150) CONSTRAINT "COURSE_TITLE_NN" NOT NULL ENABLE,
+    "DESCRIPTION" VARCHAR2(1000),
+    "STARTS_AT" DATE CONSTRAINT "COURSE_STARTS_AT_NN" NOT NULL ENABLE,
+    "ENDS_AT" DATE CONSTRAINT "COURSE_ENDS_AT_NN" NOT NULL ENABLE,
+    "MAX_PARTICIPANTS" NUMBER(5,0) CONSTRAINT "COURSE_MAX_PARTICIPANTS_NN" NOT NULL ENABLE,
+    "LOCATION" VARCHAR2(150),
+    "STATUS" VARCHAR2(20) DEFAULT 'OPEN' CONSTRAINT "COURSE_STATUS_NN" NOT NULL ENABLE,
+    CONSTRAINT "COURSES_PK" PRIMARY KEY ("COURSE_ID")
+   );
+
+-- Create enrollments table
+CREATE TABLE "COURSE_ENROLLMENTS"
+   ("ENROLLMENT_ID" NUMBER(10,0),
+    "COURSE_ID" NUMBER(10,0) CONSTRAINT "COURSE_ENR_COURSE_ID_NN" NOT NULL ENABLE,
+    "EMPLOYEE_ID" NUMBER(6,0) CONSTRAINT "COURSE_ENR_EMPLOYEE_ID_NN" NOT NULL ENABLE,
+    "STATUS" VARCHAR2(20) DEFAULT 'PENDING' CONSTRAINT "COURSE_ENR_STATUS_NN" NOT NULL ENABLE,
+    "VERIFICATION_TOKEN" VARCHAR2(255),
+    "RESERVED_UNTIL" DATE,
+    "CONFIRMED_AT" DATE,
+    "CREATED_AT" DATE DEFAULT SYSDATE CONSTRAINT "COURSE_ENR_CREATED_AT_NN" NOT NULL ENABLE,
+    CONSTRAINT "COURSE_ENROLLMENTS_PK" PRIMARY KEY ("ENROLLMENT_ID"),
+    CONSTRAINT "COURSE_ENR_UK" UNIQUE ("COURSE_ID", "EMPLOYEE_ID"),
+    CONSTRAINT "COURSE_ENR_COURSE_FK" FOREIGN KEY ("COURSE_ID")
+        REFERENCES "COURSES" ("COURSE_ID") ENABLE,
+    CONSTRAINT "COURSE_ENR_EMPLOYEE_FK" FOREIGN KEY ("EMPLOYEE_ID")
+        REFERENCES "EMPLOYEES" ("EMPLOYEE_ID") ENABLE
+   );
+
+-- Create sequence for courses PK
+CREATE SEQUENCE "COURSES_SEQ"
+	MINVALUE 1
+	MAXVALUE 9999999999
+	INCREMENT BY 1
+	START WITH 7
+	NOCACHE NOORDER NOCYCLE;
+
+-- Create sequence for enrollments PK
+CREATE SEQUENCE "COURSE_ENROLLMENTS_SEQ"
+	MINVALUE 1
+	MAXVALUE 9999999999
+	INCREMENT BY 1
+	START WITH 1
+	NOCACHE NOORDER NOCYCLE;
+
+-- Seed courses (enrollments stay empty on startup)
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(1, 'Python Fundamentals', 'Introduction to Python basics for beginners.', TO_DATE('2026-05-05 09:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-05-05 16:00', 'yyyy-mm-dd hh24:mi'), 20, 'Room A1', 'OPEN');
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(2, 'Advanced SQL', 'Complex queries, joins, and performance basics with Oracle.', TO_DATE('2026-05-12 09:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-05-12 16:00', 'yyyy-mm-dd hh24:mi'), 16, 'Room B2', 'OPEN');
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(3, 'REST API Design', 'Principles for building clean and maintainable APIs.', TO_DATE('2026-05-19 10:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-05-19 15:00', 'yyyy-mm-dd hh24:mi'), 18, 'Room C1', 'OPEN');
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(4, 'Angular Essentials', 'Building modern frontend applications with Angular.', TO_DATE('2026-05-26 09:30', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-05-26 16:30', 'yyyy-mm-dd hh24:mi'), 15, 'Room D4', 'OPEN');
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(5, 'Docker in Practice', 'Containers, images, compose, and local development workflows.', TO_DATE('2026-06-02 09:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-06-02 16:00', 'yyyy-mm-dd hh24:mi'), 20, 'Room Lab 1', 'OPEN');
+INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
+VALUES(6, 'AI-assisted Workflows', 'Using LLMs and automation tools effectively in projects.', TO_DATE('2026-06-09 10:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-06-09 15:30', 'yyyy-mm-dd hh24:mi'), 12, 'Room Innovation', 'OPEN');
