@@ -1,5 +1,6 @@
 services:
   db:
+    platform: linux/amd64
     image: gvenzl/oracle-xe:21.3.0
     container_name: oracle-db
     ports:
@@ -7,9 +8,21 @@ services:
       - "5500:5500"
     environment:
       ORACLE_PASSWORD: oracle
+
+  schema-init:
+    platform: linux/amd64
+    image: gvenzl/oracle-xe:21.3.0
+    container_name: oracle-schema-init
+    depends_on:
+      - db
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+    command:
+      - "until printf 'SET HEADING OFF\\nSELECT ''READY'' FROM dual;\\nEXIT\\n' | sqlplus -s system/oracle@//db:1521/XEPDB1 | grep -q 'READY'; do sleep 2; done; sqlplus system/oracle@//db:1521/XEPDB1 @/schema/01_SQL_Schema_HR.sql"
     volumes:
-      # Init scripts in this directory are executed when Oracle initializes a fresh database.
-      - ./backend-plsql:/docker-entrypoint-initdb.d
+      - ./backend-plsql/schema:/schema:ro
 
   django:
     build: ./backend
@@ -22,7 +35,8 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - db
+      schema-init:
+        condition: service_completed_successfully
 
   angular:
     build: ./frontend-angular
