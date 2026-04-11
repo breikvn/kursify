@@ -73,7 +73,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.oracle",
-        "NAME": "db:1521/freepdb1",   # Host:Port/ServiceName
+        "NAME": "db:1521/xepdb1",   # Host:Port/ServiceName
         "USER": "SYSTEM",
         "PASSWORD": "oracle",
     }

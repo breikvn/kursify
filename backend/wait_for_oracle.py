@@ -6,7 +6,7 @@ import oracledb
 
 HOST = os.environ.get("ORACLE_HOST", "db")
 PORT = int(os.environ.get("ORACLE_PORT", "1521"))
-SERVICE_NAME = os.environ.get("ORACLE_SERVICE_NAME", "freepdb1")
+SERVICE_NAME = os.environ.get("ORACLE_SERVICE_NAME", "xepdb1")
 USER = os.environ.get("ORACLE_USER", "SYSTEM")
 PASSWORD = os.environ.get("ORACLE_PASSWORD", "oracle")
 TIMEOUT_SECONDS = int(os.environ.get("ORACLE_WAIT_TIMEOUT", "180"))

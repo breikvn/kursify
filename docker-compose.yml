@@ -8,7 +8,7 @@ services:
     environment:
       ORACLE_PASSWORD: oracle
     volumes:
-      # SQL files in this directory are executed when Oracle initializes a fresh database.
+      # Init scripts in this directory are executed when Oracle initializes a fresh database.
       - ./backend-plsql:/docker-entrypoint-initdb.d
 
   django:
@@ -17,6 +17,8 @@ services:
     command: sh -c "python wait_for_oracle.py && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
+    environment:
+      ORACLE_SERVICE_NAME: xepdb1
     volumes:
       - ./backend:/app
     depends_on:
