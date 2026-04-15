@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export interface Course {
@@ -17,7 +17,7 @@ export interface Course {
       <h3>{{ course.title }}</h3>
       <p>{{ course.description }}</p>
 
-      <button (click)="toggle.emit(course.id)">
+      <button *ngIf="showSelectionButton" (click)="toggle.emit(course.id)">
         {{ course.selected ? 'Abwählen' : 'Wählen' }}
       </button>
     </div>
@@ -29,6 +29,7 @@ export interface Course {
       padding: 16px;
       width: 220px;
       box-shadow: 0 2px 6px rgba(0,0,0,.1);
+      background: white;
     }
 
     button {
@@ -45,6 +46,6 @@ export interface Course {
 })
 export class CourseCardComponent {
   @Input() course!: Course;
+  @Input() showSelectionButton = true;
   @Output() toggle = new EventEmitter<number>();
 }
-

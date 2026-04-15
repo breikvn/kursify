@@ -25,6 +25,11 @@ import { AuthService } from '../auth.service';
 
       <button (click)="login()">Login</button>
 
+      <div class="hint">
+        <div>Admin: <strong>admin</strong> / <strong>admin1234</strong></div>
+        <div>Nutzer: <strong>student</strong> / <strong>student1234</strong></div>
+      </div>
+
       <p class="error" *ngIf="error">
         ❌ Benutzername oder Passwort falsch
       </p>
@@ -43,6 +48,13 @@ import { AuthService } from '../auth.service';
       color: red;
       font-size: 14px;
     }
+
+    .hint {
+      font-size: 13px;
+      color: #444;
+      display: grid;
+      gap: 4px;
+    }
   `]
 })
 export class LoginComponent {
@@ -57,13 +69,11 @@ export class LoginComponent {
 
   login() {
     this.error = false;
-
-    const success = this.auth.login(this.username, this.password);
-
-    if (success) {
-      this.router.navigate(['/courses']);
-    } else {
-      this.error = true;
-    }
+    this.auth.login(this.username, this.password).subscribe({
+      next: () => this.router.navigate(['/courses']),
+      error: () => {
+        this.error = true;
+      }
+    });
   }
 }
