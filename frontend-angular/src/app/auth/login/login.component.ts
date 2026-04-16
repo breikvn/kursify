@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../auth.service';
 
 @Component({
@@ -9,61 +10,119 @@ import { AuthService } from '../auth.service';
   selector: 'app-login',
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="login">
-      <h2>Login</h2>
+    <div class="page">
+      <div class="panel">
+        <h1>Kursify</h1>
+        <p class="intro">Login mit den Testdaten aus der Datenbank.</p>
 
-      <input
-        [(ngModel)]="username"
-        placeholder="Username"
-      >
+        <div class="accounts">
+          <p><strong>Admin:</strong> admin / admin123</p>
+          <p><strong>Studenten:</strong> student.alex / student123</p>
+          <p><strong>Studenten:</strong> student.bruce / student123</p>
+        </div>
 
-      <input
-        [(ngModel)]="password"
-        type="password"
-        placeholder="Passwort"
-      >
+        <input [(ngModel)]="username" placeholder="Benutzername">
+        <input [(ngModel)]="password" type="password" placeholder="Passwort">
 
-      <button (click)="login()">Login</button>
+        <button [disabled]="loading" (click)="login()">
+          {{ loading ? 'Anmeldung...' : 'Login' }}
+        </button>
 
-      <p class="error" *ngIf="error">
-        ❌ Benutzername oder Passwort falsch
-      </p>
+        <p class="error" *ngIf="error">{{ error }}</p>
+      </div>
     </div>
   `,
   styles: [`
-    .login {
-      max-width: 300px;
-      margin: 100px auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #f6efe4 0%, #dcecf2 100%);
+      padding: 24px;
+    }
+
+    .panel {
+      width: min(420px, 100%);
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 18px 50px rgba(32, 52, 64, 0.15);
+      display: grid;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+    }
+
+    .intro,
+    .accounts p {
+      margin: 0;
+    }
+
+    .accounts {
+      background: #f4f8fa;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.95rem;
+    }
+
+    input,
+    button {
+      border-radius: 12px;
+      border: 1px solid #c9d7de;
+      padding: 12px 14px;
+      font-size: 1rem;
+    }
+
+    button {
+      border: none;
+      background: #0f6c7c;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.75;
     }
 
     .error {
-      color: red;
-      font-size: 14px;
+      color: #a32121;
+      margin: 0;
     }
   `]
 })
 export class LoginComponent {
   username = '';
   password = '';
-  error = false;
+  loading = false;
+  error = '';
 
   constructor(
     private auth: AuthService,
     private router: Router
-  ) {}
+  ) {
+    if (this.auth.isLoggedIn) {
+      void this.router.navigate(['/courses']);
+    }
+  }
 
   login() {
-    this.error = false;
+    this.loading = true;
+    this.error = '';
 
-    const success = this.auth.login(this.username, this.password);
-
-    if (success) {
-      this.router.navigate(['/courses']);
-    } else {
-      this.error = true;
-    }
+    this.auth.login(this.username, this.password).subscribe({
+      next: () => {
+        this.loading = false;
+        void this.router.navigate(['/courses']);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.loading = false;
+        this.error = error.error?.detail || 'Login fehlgeschlagen.';
+      },
+    });
   }
 }

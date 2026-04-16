@@ -21,6 +21,7 @@ DROP TABLE d_packages;
 DROP TABLE d_clients;
 DROP TABLE d_cds;
 ALTER TABLE DEPARTMENTS DROP CONSTRAINT "DEPT_MGR_FK";
+DROP TABLE app_users;
 DROP TABLE course_enrollments;
 DROP TABLE courses;
 DROP TABLE job_grades;
@@ -36,6 +37,7 @@ DROP TABLE wf_languages;
 DROP TABLE wf_countries;
 DROP TABLE wf_world_regions;
 DROP TABLE wf_currencies;
+DROP SEQUENCE "APP_USERS_SEQ";
 
 --Create wf_currencies table
 CREATE TABLE  WF_CURRENCIES 
@@ -3687,6 +3689,30 @@ CREATE SEQUENCE "LOCATIONS_SEQ"
 	START WITH 3300 
 	NOCACHE  NOORDER  NOCYCLE;
 
+-- Create application users table
+CREATE TABLE "APP_USERS"
+   ("USER_ID" NUMBER(10,0),
+    "USERNAME" VARCHAR2(50) CONSTRAINT "APP_USERS_USERNAME_NN" NOT NULL ENABLE,
+    "PASSWORD" VARCHAR2(255) CONSTRAINT "APP_USERS_PASSWORD_NN" NOT NULL ENABLE,
+    "ROLE" VARCHAR2(20) CONSTRAINT "APP_USERS_ROLE_NN" NOT NULL ENABLE,
+    "DISPLAY_NAME" VARCHAR2(100),
+    "AUTH_TOKEN" VARCHAR2(255),
+    "EMPLOYEE_ID" NUMBER(6,0),
+    "CREATED_AT" DATE DEFAULT SYSDATE CONSTRAINT "APP_USERS_CREATED_AT_NN" NOT NULL ENABLE,
+    CONSTRAINT "APP_USERS_PK" PRIMARY KEY ("USER_ID"),
+    CONSTRAINT "APP_USERS_USERNAME_UK" UNIQUE ("USERNAME"),
+    CONSTRAINT "APP_USERS_ROLE_CHK" CHECK ("ROLE" IN ('ADMIN', 'STUDENT')),
+    CONSTRAINT "APP_USERS_EMPLOYEE_FK" FOREIGN KEY ("EMPLOYEE_ID")
+        REFERENCES "EMPLOYEES" ("EMPLOYEE_ID") ENABLE
+   );
+
+CREATE SEQUENCE "APP_USERS_SEQ"
+	MINVALUE 1
+	MAXVALUE 9999999999
+	INCREMENT BY 1
+	START WITH 4
+	NOCACHE NOORDER NOCYCLE;
+
 -- Create courses table
 CREATE TABLE "COURSES"
    ("COURSE_ID" NUMBER(10,0),
@@ -3747,3 +3773,11 @@ INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_parti
 VALUES(5, 'Docker in Practice', 'Containers, images, compose, and local development workflows.', TO_DATE('2026-06-02 09:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-06-02 16:00', 'yyyy-mm-dd hh24:mi'), 20, 'Room Lab 1', 'OPEN');
 INSERT INTO courses(course_id, title, description, starts_at, ends_at, max_participants, location, status)
 VALUES(6, 'AI-assisted Workflows', 'Using LLMs and automation tools effectively in projects.', TO_DATE('2026-06-09 10:00', 'yyyy-mm-dd hh24:mi'), TO_DATE('2026-06-09 15:30', 'yyyy-mm-dd hh24:mi'), 12, 'Room Innovation', 'OPEN');
+
+-- Seed application users
+INSERT INTO app_users(user_id, username, password, role, display_name, employee_id)
+VALUES(1, 'admin', 'admin123', 'ADMIN', 'System Admin', 100);
+INSERT INTO app_users(user_id, username, password, role, display_name, employee_id)
+VALUES(2, 'student.alex', 'student123', 'STUDENT', 'Alexander Hunold', 103);
+INSERT INTO app_users(user_id, username, password, role, display_name, employee_id)
+VALUES(3, 'student.bruce', 'student123', 'STUDENT', 'Bruce Ernst', 104);

@@ -5,6 +5,7 @@ from django.utils import timezone
 
 
 ACTIVE_ENROLLMENT_STATUSES = ("PENDING", "CONFIRMED")
+USER_ROLES = ("ADMIN", "STUDENT")
 
 
 class Employee(models.Model):
@@ -23,6 +24,14 @@ class Employee(models.Model):
         db_table = "EMPLOYEES"
         ordering = ["employee_id"]
 
+    def save(self, *args, **kwargs):
+        if self.employee_id is None:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT EMPLOYEES_SEQ.NEXTVAL FROM DUAL")
+                self.employee_id = cursor.fetchone()[0]
+
+        super().save(*args, **kwargs)
+
 
 class Course(models.Model):
     course_id = models.IntegerField(primary_key=True, db_column="COURSE_ID")
@@ -38,6 +47,14 @@ class Course(models.Model):
         managed = False
         db_table = "COURSES"
         ordering = ["starts_at", "course_id"]
+
+    def save(self, *args, **kwargs):
+        if self.course_id is None:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COURSES_SEQ.NEXTVAL FROM DUAL")
+                self.course_id = cursor.fetchone()[0]
+
+        super().save(*args, **kwargs)
 
     @property
     def active_enrollment_count(self) -> int:
@@ -92,3 +109,37 @@ class CourseEnrollment(models.Model):
     @classmethod
     def default_reservation_deadline(cls):
         return timezone.now() + timedelta(hours=24)
+
+
+class AppUser(models.Model):
+    user_id = models.IntegerField(primary_key=True, db_column="USER_ID")
+    username = models.CharField(max_length=50, db_column="USERNAME")
+    password = models.CharField(max_length=255, db_column="PASSWORD")
+    role = models.CharField(max_length=20, db_column="ROLE")
+    display_name = models.CharField(max_length=100, db_column="DISPLAY_NAME", blank=True, null=True)
+    auth_token = models.CharField(max_length=255, db_column="AUTH_TOKEN", blank=True, null=True)
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.DO_NOTHING,
+        db_column="EMPLOYEE_ID",
+        related_name="app_users",
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(db_column="CREATED_AT")
+
+    class Meta:
+        managed = False
+        db_table = "APP_USERS"
+        ordering = ["user_id"]
+
+    def save(self, *args, **kwargs):
+        if self.user_id is None:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT APP_USERS_SEQ.NEXTVAL FROM DUAL")
+                self.user_id = cursor.fetchone()[0]
+
+        if self.created_at is None:
+            self.created_at = timezone.now()
+
+        super().save(*args, **kwargs)
