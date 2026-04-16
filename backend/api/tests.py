@@ -15,6 +15,10 @@ class ApiUrlTests(SimpleTestCase):
         match = reverse("course-unenroll", kwargs={"course_id": 1})
         self.assertEqual(match, "/api/courses/1/unenroll")
 
+    def test_course_confirm_endpoint_is_registered(self):
+        match = reverse("course-confirm")
+        self.assertEqual(match, "/api/enrollments/confirm")
+
     def test_users_endpoint_is_registered(self):
         match = reverse("users")
         self.assertEqual(match, "/api/users")

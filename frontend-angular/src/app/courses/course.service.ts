@@ -15,6 +15,9 @@ export interface Course {
   active_enrollment_count: number;
   available_slots: number;
   selected: boolean;
+  enrollment_status: 'PENDING' | 'CONFIRMED' | null;
+  reserved_until: string | null;
+  confirmed_at: string | null;
 }
 
 export interface CourseListResponse {

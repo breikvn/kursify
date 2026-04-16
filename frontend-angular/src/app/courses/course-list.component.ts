@@ -376,7 +376,9 @@ export class CourseListComponent implements OnInit {
     request.subscribe({
       next: () => {
         this.busyCourseId = null;
-        this.message = course.selected ? 'Kurs abgewählt.' : 'Kurs gewählt.';
+        this.message = course.selected
+          ? 'Kurs abgewählt.'
+          : 'Reservierung angelegt. Bitte Teilnahme innerhalb von 24 Stunden per E-Mail bestätigen.';
         this.loadCourses();
       },
       error: (error: HttpErrorResponse) => {

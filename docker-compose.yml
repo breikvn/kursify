@@ -30,13 +30,28 @@ services:
     command: sh -c "python wait_for_oracle.py && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
     environment:
       ORACLE_SERVICE_NAME: xepdb1
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_EMAIL_MODEL: ${OLLAMA_EMAIL_MODEL:-}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@kursify.local}
     volumes:
       - ./backend:/app
     depends_on:
       schema-init:
         condition: service_completed_successfully
+      ollama:
+        condition: service_started
 
   angular:
     build: ./frontend-angular

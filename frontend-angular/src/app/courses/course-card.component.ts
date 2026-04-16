@@ -8,8 +8,8 @@ import { Course } from './course.service';
   imports: [CommonModule, DatePipe],
   template: `
     <article class="card">
-      <div class="badge" [class.selected]="course.selected">
-        {{ course.selected ? 'Gebucht' : 'Offen' }}
+      <div class="badge" [class.selected]="course.selected" [class.pending]="course.enrollment_status === 'PENDING'">
+        {{ badgeLabel }}
       </div>
 
       <h3>{{ course.title }}</h3>
@@ -28,13 +28,17 @@ import { Course } from './course.service';
           <dt>Plätze</dt>
           <dd>{{ course.available_slots }} frei / {{ course.max_participants }}</dd>
         </div>
+        <div *ngIf="course.enrollment_status === 'PENDING' && course.reserved_until">
+          <dt>Bestaetigen bis</dt>
+          <dd>{{ course.reserved_until | date: 'dd.MM.yyyy HH:mm' }}</dd>
+        </div>
       </dl>
 
       <button
         *ngIf="showActions"
         [disabled]="loading || (!course.selected && course.available_slots === 0)"
         (click)="toggle.emit(course.course_id)">
-        {{ loading ? 'Speichern...' : course.selected ? 'Abwählen' : 'Wählen' }}
+        {{ loading ? 'Speichern...' : buttonLabel }}
       </button>
     </article>
   `,
@@ -61,6 +65,11 @@ import { Course } from './course.service';
     .badge.selected {
       background: #dff4e7;
       color: #165c34;
+    }
+
+    .badge.pending {
+      background: #fff0ce;
+      color: #8a5b00;
     }
 
     h3,
@@ -103,4 +112,24 @@ export class CourseCardComponent {
   @Input() showActions = true;
   @Input() loading = false;
   @Output() toggle = new EventEmitter<number>();
+
+  get badgeLabel(): string {
+    if (this.course.enrollment_status === 'PENDING') {
+      return 'Reserviert';
+    }
+    if (this.course.enrollment_status === 'CONFIRMED') {
+      return 'Gebucht';
+    }
+    return 'Offen';
+  }
+
+  get buttonLabel(): string {
+    if (!this.course.selected) {
+      return 'Wählen';
+    }
+    if (this.course.enrollment_status === 'PENDING') {
+      return 'Reservierung stornieren';
+    }
+    return 'Abwählen';
+  }
 }

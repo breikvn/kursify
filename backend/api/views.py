@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import json
 import secrets
 from datetime import datetime
 
+from django.db.models import Q
 from django.db import IntegrityError, transaction
-from django.http import HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from .enrollment_notifications import send_confirmation_email
 from .models import ACTIVE_ENROLLMENT_STATUSES, AppUser, Course, CourseEnrollment, Employee
 
 
@@ -39,7 +43,19 @@ def _user_payload(user: AppUser, include_token: bool = False) -> dict:
     return payload
 
 
-def _course_payload(course: Course, selected_course_ids: set[int] | None = None) -> dict:
+def _current_enrollments_for(user: AppUser | None) -> dict[int, CourseEnrollment]:
+    if user is None or user.employee is None:
+        return {}
+
+    enrollments = CourseEnrollment.objects.filter(
+        employee=user.employee,
+        status__in=ACTIVE_ENROLLMENT_STATUSES,
+    )
+    return {enrollment.course_id: enrollment for enrollment in enrollments}
+
+
+def _course_payload(course: Course, enrollment_by_course_id: dict[int, CourseEnrollment] | None = None) -> dict:
+    enrollment = (enrollment_by_course_id or {}).get(course.course_id)
     return {
         "course_id": course.course_id,
         "title": course.title,
@@ -51,7 +67,10 @@ def _course_payload(course: Course, selected_course_ids: set[int] | None = None)
         "status": course.status,
         "active_enrollment_count": course.active_enrollment_count,
         "available_slots": course.available_slots,
-        "selected": course.course_id in (selected_course_ids or set()),
+        "selected": enrollment is not None,
+        "enrollment_status": enrollment.status if enrollment else None,
+        "reserved_until": enrollment.reserved_until.isoformat() if enrollment and enrollment.reserved_until else None,
+        "confirmed_at": enrollment.confirmed_at.isoformat() if enrollment and enrollment.confirmed_at else None,
     }
 
 
@@ -117,18 +136,6 @@ def _require_student(request):
     return user, None
 
 
-def _selected_course_ids_for(user: AppUser | None) -> set[int]:
-    if user is None or user.employee is None:
-        return set()
-
-    return set(
-        CourseEnrollment.objects.filter(
-            employee=user.employee,
-            status__in=ACTIVE_ENROLLMENT_STATUSES,
-        ).values_list("course_id", flat=True)
-    )
-
-
 def _parse_datetime(value: str | None):
     if not value:
         return None
@@ -138,6 +145,37 @@ def _parse_datetime(value: str | None):
     if timezone.is_naive(parsed):
         return timezone.make_aware(parsed, timezone.get_current_timezone())
     return parsed
+
+
+def _cleanup_expired_reservations(course: Course | None = None):
+    filters = Q(status="PENDING", reserved_until__isnull=False, reserved_until__lt=timezone.now())
+    if course is not None:
+        filters &= Q(course=course)
+
+    CourseEnrollment.objects.filter(filters).update(
+        status="CANCELLED",
+        verification_token=None,
+        reserved_until=None,
+    )
+
+
+def _confirmation_link(request, token: str) -> str:
+    return request.build_absolute_uri(f"/api/enrollments/confirm?token={token}")
+
+
+def _confirmation_response(title: str, detail: str, status: int = 200) -> HttpResponse:
+    return HttpResponse(
+        (
+            "<!doctype html><html lang='de'><head><meta charset='utf-8'>"
+            f"<title>{title}</title>"
+            "<style>body{font-family:Arial,sans-serif;background:#f4f1ea;color:#16303b;"
+            "padding:40px}main{max-width:640px;margin:0 auto;background:#fff;border-radius:18px;"
+            "padding:28px;box-shadow:0 12px 32px rgba(20,45,56,.08)}h1{margin-top:0}</style>"
+            f"</head><body><main><h1>{title}</h1><p>{detail}</p></main></body></html>"
+        ),
+        status=status,
+        content_type="text/html; charset=utf-8",
+    )
 
 
 @csrf_exempt
@@ -203,13 +241,14 @@ def courses(request):
         if error:
             return error
 
+        _cleanup_expired_reservations()
         queryset = Course.objects.all()
         status_filter = request.GET.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter.upper())
 
-        selected_course_ids = _selected_course_ids_for(current_user)
-        return JsonResponse({"results": [_course_payload(course, selected_course_ids) for course in queryset]})
+        enrollment_by_course_id = _current_enrollments_for(current_user)
+        return JsonResponse({"results": [_course_payload(course, enrollment_by_course_id) for course in queryset]})
 
     if request.method != "POST":
         return HttpResponseNotAllowed(["GET", "POST"])
@@ -262,9 +301,10 @@ def course_detail(request, course_id: int):
     except Course.DoesNotExist:
         return _json_error("Course not found.", 404)
 
+    _cleanup_expired_reservations(course)
     current_user = _current_user(request)
-    selected_course_ids = _selected_course_ids_for(current_user)
-    return JsonResponse(_course_payload(course, selected_course_ids))
+    enrollment_by_course_id = _current_enrollments_for(current_user)
+    return JsonResponse(_course_payload(course, enrollment_by_course_id))
 
 
 @csrf_exempt
@@ -277,6 +317,7 @@ def course_availability(request, course_id: int):
     except Course.DoesNotExist:
         return _json_error("Course not found.", 404)
 
+    _cleanup_expired_reservations(course)
     return JsonResponse(
         {
             "course_id": course.course_id,
@@ -410,6 +451,7 @@ def course_enroll(request, course_id: int):
     except Course.DoesNotExist:
         return _json_error("Course not found.", 404)
 
+    _cleanup_expired_reservations(course)
     existing = CourseEnrollment.objects.filter(course=course, employee=current_user.employee).first()
     if existing and existing.status in ACTIVE_ENROLLMENT_STATUSES:
         return JsonResponse(
@@ -423,27 +465,47 @@ def course_enroll(request, course_id: int):
     if course.available_slots <= 0:
         return _json_error("Course is full.", 409)
 
-    if existing:
-        existing.status = "CONFIRMED"
-        existing.reserved_until = None
-        existing.confirmed_at = timezone.now()
-        existing.verification_token = None
-        existing.save(update_fields=["status", "reserved_until", "confirmed_at", "verification_token"])
-        enrollment = existing
-    else:
-        enrollment = CourseEnrollment(
-            enrollment_id=None,
-            course=course,
-            employee=current_user.employee,
-            status="CONFIRMED",
-            verification_token=None,
-            reserved_until=None,
-            confirmed_at=timezone.now(),
-            created_at=None,
-        )
-        enrollment.save()
+    token = secrets.token_urlsafe(32)
+    reserved_until = CourseEnrollment.default_reservation_deadline()
 
-    return JsonResponse(_enrollment_payload(enrollment), status=201)
+    try:
+        with transaction.atomic():
+            if existing:
+                existing.status = "PENDING"
+                existing.reserved_until = reserved_until
+                existing.confirmed_at = None
+                existing.verification_token = token
+                existing.save(update_fields=["status", "reserved_until", "confirmed_at", "verification_token"])
+                enrollment = existing
+            else:
+                enrollment = CourseEnrollment(
+                    enrollment_id=None,
+                    course=course,
+                    employee=current_user.employee,
+                    status="PENDING",
+                    verification_token=token,
+                    reserved_until=reserved_until,
+                    confirmed_at=None,
+                    created_at=None,
+                )
+                enrollment.save()
+
+            send_confirmation_email(
+                course=course,
+                employee=current_user.employee,
+                confirmation_link=_confirmation_link(request, token),
+                reserved_until=reserved_until,
+            )
+    except Exception:
+        return _json_error("Confirmation email could not be sent.", 502)
+
+    return JsonResponse(
+        {
+            "detail": "Reservation created. Please confirm via email within 24 hours.",
+            "enrollment": _enrollment_payload(enrollment),
+        },
+        status=201,
+    )
 
 
 @csrf_exempt
@@ -455,6 +517,7 @@ def course_unenroll(request, course_id: int):
     if error:
         return error
 
+    _cleanup_expired_reservations()
     enrollment = CourseEnrollment.objects.filter(
         course_id=course_id,
         employee=current_user.employee,
@@ -466,5 +529,57 @@ def course_unenroll(request, course_id: int):
     enrollment.status = "CANCELLED"
     enrollment.reserved_until = None
     enrollment.verification_token = None
-    enrollment.save(update_fields=["status", "reserved_until", "verification_token"])
+    enrollment.confirmed_at = None
+    enrollment.save(update_fields=["status", "reserved_until", "verification_token", "confirmed_at"])
     return JsonResponse(_enrollment_payload(enrollment))
+
+
+@csrf_exempt
+def confirm_enrollment(request):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    token = (request.GET.get("token") or "").strip()
+    if not token:
+        return _confirmation_response("Ungueltiger Link", "Der Bestaetigungslink enthaelt kein Token.", status=400)
+
+    enrollment = (
+        CourseEnrollment.objects.select_related("course", "employee")
+        .filter(verification_token=token)
+        .first()
+    )
+    if enrollment is None:
+        return _confirmation_response(
+            "Link nicht gueltig",
+            "Diese Reservierung wurde bereits bestaetigt, storniert oder ist nicht mehr vorhanden.",
+            status=404,
+        )
+
+    if enrollment.status != "PENDING":
+        return _confirmation_response(
+            "Reservierung nicht offen",
+            "Diese Reservierung ist nicht mehr im bestaetigbaren Status.",
+            status=409,
+        )
+
+    if enrollment.reserved_until and enrollment.reserved_until < timezone.now():
+        enrollment.status = "CANCELLED"
+        enrollment.reserved_until = None
+        enrollment.verification_token = None
+        enrollment.confirmed_at = None
+        enrollment.save(update_fields=["status", "reserved_until", "verification_token", "confirmed_at"])
+        return _confirmation_response(
+            "Frist abgelaufen",
+            "Die 24-Stunden-Frist ist abgelaufen. Der reservierte Platz wurde wieder freigegeben.",
+            status=410,
+        )
+
+    enrollment.status = "CONFIRMED"
+    enrollment.confirmed_at = timezone.now()
+    enrollment.reserved_until = None
+    enrollment.verification_token = None
+    enrollment.save(update_fields=["status", "confirmed_at", "reserved_until", "verification_token"])
+    return _confirmation_response(
+        "Teilnahme bestaetigt",
+        f"Dein Platz fuer den Kurs \"{enrollment.course.title}\" ist jetzt verbindlich bestaetigt.",
+    )

@@ -8,6 +8,7 @@ urlpatterns = [
     path("auth/login", views.login, name="login"),
     path("auth/logout", views.logout, name="logout"),
     path("auth/me", views.me, name="me"),
+    path("enrollments/confirm", views.confirm_enrollment, name="course-confirm"),
     path("courses", views.courses, name="courses"),
     path("courses/<int:course_id>", views.course_detail, name="course-detail"),
     path("courses/<int:course_id>/availability", views.course_availability, name="course-availability"),
